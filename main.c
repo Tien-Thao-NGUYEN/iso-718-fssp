@@ -12,6 +12,7 @@ int main(int argc, char *argv[]) {
     //showGConfig(&gc0);
     //printf("\n");
 
+
     LConfig lc = getLConfig(&gc0, 0);
     //showLConfig(&lc);
     //printf("\n");
