@@ -1,7 +1,7 @@
 #include "rule.h"
 
 
-void showIntegerArray(int* pArray, int size);
+void showIntegerArray(State*, int size);
 void showLConfig(LConfig*);
 void showTransition(Transition*);
 void showRule(Rule*);

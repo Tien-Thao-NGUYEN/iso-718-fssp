@@ -2,7 +2,7 @@
 #include "show.h"
 
 
-void showIntegerArray(int* pArray, int size) {
+void showIntegerArray(State* pArray, int size) {
     if (size == 0)
         printf("size zero !!!");
     else {
@@ -36,7 +36,8 @@ void showGConfig(GConfig* pGConfig) {
 
 void showDiagram(Diagram* pDiagram) {
     for (int t = 0; t <= pDiagram->timeFin; t++) {
-        showGConfig(&(pDiagram->pGConfigArr[t]));
+        showGConfig(&((GConfig){pStateArr : pDiagram->pGConfigArr + (t * pDiagram->sizeGConfig), 
+                                size : pDiagram->sizeGConfig}));
         printf("\n");
     }
 }

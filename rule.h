@@ -9,7 +9,7 @@ typedef struct {
 } LConfig;
 
 typedef struct {
-    LConfig pLConfig;
+    LConfig lConfig;
     State result;
 } Transition;
 
@@ -24,9 +24,9 @@ typedef struct {
 } GConfig;
 
 typedef struct {
-    State *pGConfigArr;
-    int size;
+    State *pStateArr;
     int timeFin;
+    int sizeGConfig;
 } Diagram;
 
 

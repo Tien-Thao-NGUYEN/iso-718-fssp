@@ -11,7 +11,7 @@
 #define MAX_CHARACTER 20
 #define NUMBER_SOLUTION 11
 
-boolean checkDgm(Diagram*, Diagram*, Rule*, int*);
+boolean checkDgm(Rule*, Rule*, Rule*, int currentSize, int* maxSize);
 Rule ruleFromFile(FILE*);
 
 
@@ -39,15 +39,14 @@ int main(int argc, char *argv[]) {
 
     int maxSize = 100;
     for (int i = 0; i < NUMBER_SOLUTION; i++) {
+        Rule localMapping;
+        localMapping.pTransitionArr = calloc(ruleArr[i].size, sizeof(Transition));
         for (int j = 0; j < NUMBER_SOLUTION; j++) {
             if (i != j) {
-                Rule localMapping;
-                localMapping.pTransitionArr = calloc(ruleArr[i].size, sizeof(Transition));
                 localMapping.size = 0;
-
                 boolean isDet = true;
                 for (int size = 2; size < maxSize; size++) {
-                    boolean check = checkDgm(&dgmSrc, &dgmDst, &localMapping, &maxSize);
+                    boolean check = checkDgm(&ruleArr[i], &ruleArr[j], &localMapping, size, &maxSize);
                     if (check == false) {
                         isDet = false;
                         break;
@@ -91,10 +90,11 @@ Rule ruleFromFile(FILE* file) {
             token = strtok(NULL, " ");
         }
         
-        rule.pTransitionArr[size].pStateArr[0] = stateArr[0];
-        rule.pTransitionArr[size].pStateArr[1] = stateArr[1];
-        rule.pTransitionArr[size].pStateArr[2] = stateArr[2];
-        rule.pTransitionArr[size].result = stateArr[3];
+        rule.pTransitionArr[rule.size].lConfig.pStateArr[0] = stateArr[0];
+        rule.pTransitionArr[rule.size].lConfig.pStateArr[1] = stateArr[1];
+        rule.pTransitionArr[rule.size].lConfig.pStateArr[2] = stateArr[2];
+        rule.pTransitionArr[rule.size].result = stateArr[3];
+        rule.size++;
     }
 
     return rule;
@@ -102,14 +102,15 @@ Rule ruleFromFile(FILE* file) {
 
 
 boolean checkDgm(Rule* ruleSrc, Rule* ruleDst, Rule* localMapping, int currentSize, int* maxSize) {
-    GConfig gc0 = getInitGConfig(size);
+    int timeFin = 2 * currentSize - 2;
+    GConfig gc0 = getInitGConfig(currentSize);
     Diagram dgmSrc = getDiagram(ruleSrc, &gc0);
     Diagram dgmDst = getDiagram(ruleDst, &gc0);
 
     boolean hasNewLConfig = false;
-    for (int t = 0; t <= dgmSrc->timeFin - 1; t++) {
-        GConfig gcSrc = dgmSrc->pGConfigArr[t];
-        GConfig gcDst = dgmDst->pGConfigArr[t + 1];
+    for (int t = 0; t <= timeFin - 1; t++) {
+        GConfig gcSrc = (GConfig){pStateArr : dgmSrc.pStateArr + t * currentSize, size : currentSize};
+        GConfig gcDst = (GConfig){pStateArr : dgmDst.pStateArr + (t + 1) * currentSize, size : currentSize};
         for (int p = 0; p < gcSrc.size; p++) {
             LConfig lcSrc = getLConfig(&gcSrc, p);
             int resDst = gcDst.pStateArr[p];
@@ -127,6 +128,9 @@ boolean checkDgm(Rule* ruleSrc, Rule* ruleDst, Rule* localMapping, int currentSi
         }
     }
 
+    freeDiagram(&dgmSrc);
+    freeDiagram(&dgmDst);
+    
     if (hasNewLConfig == true) {
         int newMaxSize = currentSize * 2; 
         if (newMaxSize > *maxSize)
