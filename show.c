@@ -26,6 +26,8 @@ void showRule(Rule* pRule) {
         showTransition(&(pRule->pTransitionArr[i]));
         printf("\n");
     }
+    
+    printf("Rule size = %d\n", pRule->size);
 }
 
 void showGConfig(GConfig* pGConfig) {

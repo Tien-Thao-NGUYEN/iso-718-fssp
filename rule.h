@@ -2,41 +2,44 @@
 #define false 0
 typedef int boolean;
 
+typedef char State;
+
 typedef struct {
-    int pStateArr[3];
+    State pStateArr[3];
 } LConfig;
 
 typedef struct {
     LConfig pLConfig;
-    int result;
+    State result;
 } Transition;
 
 typedef struct {
-    Transition* pTransitionArr;
+    Transition *pTransitionArr;
     int size;
 } Rule;
 
 typedef struct {
-    int* pStateArr;
+    State *pStateArr;
     int size;
 } GConfig;
 
 typedef struct {
-    GConfig* pGConfigArr;
+    State *pGConfigArr;
+    int size;
     int timeFin;
 } Diagram;
 
 
-LConfig newLConfig(int, int, int);
-LConfig getLConfig(GConfig*, int);
+LConfig* getLConfig(GConfig*, int pos);
 
-GConfig getInitGConfig(int);
+GConfig getInitGConfig(int configSize);
 
 boolean equals(LConfig*, LConfig*);
-int getResult(Rule*, LConfig*);
+State getResult(Rule*, LConfig*);
 
-Transition newTransition(LConfig*, int);
+Transition newTransition(LConfig*, State);
 void addTransition(Rule*, Transition*);
 
 GConfig oneStep(Rule* , GConfig*);
 Diagram getDiagram(Rule* , GConfig*);
+void freeDiagram(Diagram*);
