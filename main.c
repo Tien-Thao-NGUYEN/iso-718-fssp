@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +8,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
+#include <search.h>
 
 
 #define BUFF_SIZE 20
@@ -17,65 +20,34 @@
 
 typedef int boolean;
 typedef char State;
+typedef struct hsearch_data *Rule;
 
 
 typedef struct {
     State pStateArr[3];
 } LConfig;
 
-typedef struct {
-    LConfig lConfig;
-    State result;
-} Transition;
-
-typedef struct {
-    Transition *pTransitionArr;
-    int size;
-} Rule;
-
-void showIntegerArray(State* pArray, int size) {
-    if (size == 0)
-        printf("size zero !!!");
-    else {
-        printf("%d", pArray[0]);
-        for (int i = 1; i < size; i++)
-            printf(" %d", pArray[i]);
-    }
-}
-
-void showLConfig(LConfig* pLConfig) {
-    showIntegerArray(pLConfig->pStateArr, 3);
-}
-
-void showTransition(Transition* pTransition) {
-    showLConfig(&(pTransition->lConfig));
-    printf(" -> %d", pTransition->result);
-}
-
-void showRule(Rule* pRule) {
-    for (int i = 0; i < pRule->size; i++) {
-        showTransition(&(pRule->pTransitionArr[i]));
-        printf("\n");
-    }
-    
-    printf("Rule size = %d\n", pRule->size);
-}
 
 Rule ruleFromFile(FILE* file) {
-    Rule rule;
-    rule.pTransitionArr = calloc(150, sizeof(Transition));
-    rule.size = 0;
+    Rule rule = malloc(sizeof(struct hsearch_data));
+    hcreate_r(150 * 1.5, rule);
 
     char line[BUFF_SIZE];
-    fgets(line, BUFF_SIZE, file);//premier ligne pour l'information de la solution
+    fgets(line, BUFF_SIZE, file);
 
+    char lc[4];
+    lc[3] = 0;
+
+    ENTRY e;
+    e.key = lc;
     while (fgets(line, BUFF_SIZE, file) != NULL) {
         char* token;
-        rule.pTransitionArr[rule.size].lConfig.pStateArr[0] = strtol(line, &token, 10);
-        rule.pTransitionArr[rule.size].lConfig.pStateArr[1] = strtol(token, &token, 10);
-        rule.pTransitionArr[rule.size].lConfig.pStateArr[2] = strtol(token, &token, 10);
-        rule.pTransitionArr[rule.size].result = strtol(token, NULL, 10);
-        rule.size++;
+        lc[0] = strtol(line, &token, 10) + 1;
+        lc[1] = strtol(token, &token, 10) + 1;
+        lc[2] = strtol(token, &token, 10) + 1;
+
+        e.data = (void*) (strtol(token, NULL, 10) + 1);
+        hsearch_r(e, ENTER, NULL, rule);
     }
 
     return rule;
@@ -92,61 +64,43 @@ void initializeGConfig(State *gc, int size) {
     memset(gc + 2, 0, size - 1);
 }
 
-boolean equals(LConfig *plc1, LConfig *plc2) {
-    for (int i = 0; i <= 2; i++) {
-        if (plc1->pStateArr[i] != plc2->pStateArr[i])
-            return false;
-    }
-
-    return true;
-}
-
 void swap(void **a, void **b) {
     void *c = *a;
     *a = *b;
     *b = c;
 }
 
-LConfig* getLConfig(State *pGConfig, int pos) {
-    return (LConfig*)(pGConfig + pos);
-}
+void oneStep(Rule rule, State *pStateArrSrc, State *pStateArrDst, int size) {
+    State lc[4];
+    lc[3] = 0;
 
-State getResult(Rule rule, LConfig *plc) {
-    for (int i = 0; i < rule.size; i++) {
-        if (equals(plc, &(rule.pTransitionArr->lConfig)))//memcmp
-            return rule.pTransitionArr->result;
-        
-        rule.pTransitionArr++;
-    }
+    ENTRY e;
+    e.key = lc;
+    ENTRY *res;
 
-    return -1;
-}
-
-Transition newTransition(LConfig *pLConfig, State result) {
-    return (Transition){lConfig : *pLConfig, result : result};
-}
-
-void addTransition(Rule *pRule, Transition *pTransition) {
-    pRule->pTransitionArr[pRule->size] = *pTransition;
-    pRule->size++;
-}
-
-void oneStep(Rule *pRule, State *pStateArrSrc, State *pStateArrDst, int size) {
     for (int pos = 1; pos <= size; pos++) {
-        LConfig* pLConfig = getLConfig(pStateArrSrc, pos - 1);
-        // showLConfig(pLConfig);
-        // printf("\n");
-        pStateArrDst[pos] = getResult(*pRule, pLConfig);
+        memcpy(lc, pStateArrSrc + pos -1, 3);
+        hsearch_r(e, FIND, &res, rule);
+        pStateArrDst[pos] = (State)(res->data);
     }
 }
 
-boolean checkLocalMapping(Rule* ruleSrc, Rule* ruleDst, Rule* localMapping) {
-    // printf("in\n");
-    localMapping->size = 0;
+boolean checkLocalMapping(Rule ruleSrc, Rule ruleDst) {
+    struct hsearch_data localmappingData;
+    Rule localMapping = &localmappingData;
+    hcreate_r(150 * 1.5, localMapping);
+    
     int MAX_SIZE = 500;
     State *gcSrc = calloc(MAX_SIZE + 2, sizeof(State));
     State *gcDst = calloc(MAX_SIZE + 2, sizeof(State));
     State *gcAux = calloc(MAX_SIZE + 2, sizeof(State));
+
+    char lc[4];
+    lc[3] = 0;
+
+    ENTRY e;
+    e.key = lc;
+    ENTRY *res;
 
     for (int size = 2; size <= MAX_SIZE; size++) {
         initializeGConfig(gcSrc, size);
@@ -157,15 +111,15 @@ boolean checkLocalMapping(Rule* ruleSrc, Rule* ruleDst, Rule* localMapping) {
         int finalTime = 2 * size - 2;
         for (int t = 0; t < finalTime; t++) {
             for (int p = 0; p < size; p++) {
-                LConfig* lcSrc = getLConfig(gcSrc, p);
-                State resDst = gcDst[p + 1];
-                State oldRes = getResult(*localMapping, lcSrc);
+                memcpy(lc, gcSrc + p, 3);
 
-                if (oldRes == -1) {
-                    Transition transition = newTransition(lcSrc, resDst);
-                    addTransition(localMapping, &transition);
+                e.data = (void*) (gcDst[p + 1]);
+                hsearch_r(e, FIND, &res, localMapping);
+
+                if (res == NULL) {
+                    hsearch_r(e, ENTER, NULL, localMapping);
                 }
-                else if (oldRes != resDst) {
+                else if (res->data != e.data) {
                     printf("(%d) ", size);
                     return false;
                 }
@@ -184,6 +138,8 @@ boolean checkLocalMapping(Rule* ruleSrc, Rule* ruleDst, Rule* localMapping) {
     free(gcSrc);
     free(gcDst);
     free(gcAux);
+
+    hdestroy_r(localMapping);
 
     return true;
 }
@@ -210,18 +166,19 @@ int main(int argc, char *argv[]) {
     //showRule(&ruleArr[718]);
     //TODO il faut vérifier dans l'article de 718 jusqu'à quelle taille pour la simulation et le noté
     //TODO argumenter si possible sur cette taille 
-    Rule localMapping;
-    localMapping.pTransitionArr = calloc(NB_MAX_TRANSITION, sizeof(Transition));
+
+    
+
     for (int i = 0; i < NUMBER_SOLUTION - 1; i++) {
         for (int j = i + 1; j < NUMBER_SOLUTION; j++) {
             //if (i != j) {
-                boolean isDet = checkLocalMapping(&ruleArr[i], &ruleArr[j], &localMapping);
+                boolean isDet = checkLocalMapping(ruleArr[i], ruleArr[j]);
                 if (isDet == true)
                     printf("%d -> %d\n", i, j);
                 else
                     printf("%d x> %d\n", i, j);
 
-                isDet = checkLocalMapping(&ruleArr[j], &ruleArr[i], &localMapping);
+                isDet = checkLocalMapping(ruleArr[j], ruleArr[i]);
                 if (isDet == true)
                     printf("%d -> %d\n", j, i);
                 else
@@ -229,11 +186,10 @@ int main(int argc, char *argv[]) {
             //}
         }
     }
-    free(localMapping.pTransitionArr);
 
     for (int i = 0; i < NUMBER_SOLUTION; i++) {
-        ruleArr[i].size = 0;
-        free(ruleArr[i].pTransitionArr);
+        hdestroy_r(ruleArr[i]);
+        free(ruleArr[i]);
     }
 
     return 0;
