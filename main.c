@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -15,13 +16,8 @@
 #define NUMBER_SOLUTION 719
 #define NB_MAX_TRANSITION 150
 
-#define true 1
-#define false 0
-
-typedef int boolean;
 typedef char State;
 typedef struct hsearch_data *Rule;
-
 
 typedef struct {
     State pStateArr[3];
@@ -30,42 +26,43 @@ typedef struct {
 
 Rule ruleFromFile(FILE* file) {
     Rule rule = malloc(sizeof(struct hsearch_data));
+    *rule = (struct hsearch_data){0};
     hcreate_r(150 * 1.5, rule);
 
     char line[BUFF_SIZE];
     fgets(line, BUFF_SIZE, file);
 
-    char lc[4];
-    lc[3] = 0;
+    // TODO: add the corresponding free of the following calloc ?
+    char *lcs = calloc(150, 4 * sizeof(char));
 
-    ENTRY e;
-    e.key = lc;
-    while (fgets(line, BUFF_SIZE, file) != NULL) {
+    for (int i = 0; fgets(line, BUFF_SIZE, file) != NULL; ) {
         char* token;
-        lc[0] = strtol(line, &token, 10) + 1;
-        lc[1] = strtol(token, &token, 10) + 1;
-        lc[2] = strtol(token, &token, 10) + 1;
-
+        lcs[i++] = strtol(line, &token, 10) + 1;
+        lcs[i++] = strtol(token, &token, 10) + 1;
+        lcs[i++] = strtol(token, &token, 10) + 1;
+        lcs[i++] = 0;
+        ENTRY e, *res;
+        e.key = lcs + (i - 4);
         e.data = (void*) (strtol(token, NULL, 10) + 1);
-        hsearch_r(e, ENTER, NULL, rule);
+        hsearch_r(e, ENTER, &res, rule);
     }
 
     return rule;
 }
 
 void initializeBorder(State* gc, int size) {
-    gc[0] = 6;
-    gc[size + 1] = 6;
+    gc[0] = 6 + 1;
+    gc[size + 1] = 6 + 1;
 }
 
 void initializeGConfig(State *gc, int size) {
     initializeBorder(gc, size);
-    gc[1] = 1;
-    memset(gc + 2, 0, size - 1);
+    gc[1] = 2;
+    memset(gc + 2, 1, size - 1);
 }
 
-void swap(void **a, void **b) {
-    void *c = *a;
+void swap(State **a, State **b) {
+    State *c = *a;
     *a = *b;
     *b = c;
 }
@@ -85,8 +82,8 @@ void oneStep(Rule rule, State *pStateArrSrc, State *pStateArrDst, int size) {
     }
 }
 
-boolean checkLocalMapping(Rule ruleSrc, Rule ruleDst) {
-    struct hsearch_data localmappingData;
+bool checkLocalMapping(Rule ruleSrc, Rule ruleDst) {
+    struct hsearch_data localmappingData = {0};
     Rule localMapping = &localmappingData;
     hcreate_r(150 * 1.5, localMapping);
     
@@ -98,10 +95,6 @@ boolean checkLocalMapping(Rule ruleSrc, Rule ruleDst) {
     char lc[4];
     lc[3] = 0;
 
-    ENTRY e;
-    e.key = lc;
-    ENTRY *res;
-
     for (int size = 2; size <= MAX_SIZE; size++) {
         initializeGConfig(gcSrc, size);
         initializeBorder(gcDst, size);
@@ -109,15 +102,20 @@ boolean checkLocalMapping(Rule ruleSrc, Rule ruleDst) {
         initializeBorder(gcAux, size);
         
         int finalTime = 2 * size - 2;
-        for (int t = 0; t < finalTime; t++) {
+        int t = 0;
+        while (true) {
             for (int p = 0; p < size; p++) {
+                ENTRY e;
+                ENTRY *res;
                 memcpy(lc, gcSrc + p, 3);
-
+                e.key = lc;
                 e.data = (void*) (gcDst[p + 1]);
                 hsearch_r(e, FIND, &res, localMapping);
 
                 if (res == NULL) {
-                    hsearch_r(e, ENTER, NULL, localMapping);
+                    hsearch_r(e, FIND, &res, ruleSrc);
+                    e.key = res->key;
+                    hsearch_r(e, ENTER, &res, localMapping);
                 }
                 else if (res->data != e.data) {
                     printf("(%d) ", size);
@@ -125,11 +123,16 @@ boolean checkLocalMapping(Rule ruleSrc, Rule ruleDst) {
                 }
             }
 
-            oneStep(ruleSrc, gcSrc, gcAux, size);
-            swap((void**)&gcSrc, (void**)&gcAux);
+            t++;
+            if (t < finalTime) {
+                oneStep(ruleSrc, gcSrc, gcAux, size);
+                swap(&gcSrc, &gcAux);
 
-            oneStep(ruleDst, gcDst, gcAux, size);
-            swap((void**)&gcDst, (void**)&gcAux);
+                oneStep(ruleDst, gcDst, gcAux, size);
+                swap(&gcDst, &gcAux);
+            }
+            else
+                break;
         }
     }
 
@@ -171,19 +174,17 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < NUMBER_SOLUTION - 1; i++) {
         for (int j = i + 1; j < NUMBER_SOLUTION; j++) {
-            //if (i != j) {
-                boolean isDet = checkLocalMapping(ruleArr[i], ruleArr[j]);
-                if (isDet == true)
-                    printf("%d -> %d\n", i, j);
-                else
-                    printf("%d x> %d\n", i, j);
+            bool isDet = checkLocalMapping(ruleArr[i], ruleArr[j]);
+            if (isDet)
+                printf("%d -> %d\n", i, j);
+            else
+                printf("%d x> %d\n", i, j);
 
-                isDet = checkLocalMapping(ruleArr[j], ruleArr[i]);
-                if (isDet == true)
-                    printf("%d -> %d\n", j, i);
-                else
-                    printf("%d x> %d\n", j, i);
-            //}
+            isDet = checkLocalMapping(ruleArr[j], ruleArr[i]);
+            if (isDet)
+                printf("%d -> %d\n", j, i);
+            else
+                printf("%d x> %d\n", j, i);
         }
     }
 
